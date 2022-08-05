@@ -35,32 +35,6 @@ impl ChunkType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct BadChunkType {
-    message: String,
-}
-
-impl BadChunkType {
-    fn new() -> Self {
-        BadChunkType {
-            message: "Bad chunk type".to_string(),
-        }
-    }
-}
-
-impl fmt::Display for BadChunkType {
-    #[allow(deprecated, deprecated_in_future)]
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.write_str(self.description())
-    }
-}
-
-impl Error for BadChunkType {
-    fn description(&self) -> &str {
-        self.message.as_str()
-    }
-}
-
 impl TryFrom<[u8; 4]> for ChunkType {
     type Error = crate::Error;
 
