@@ -1,15 +1,16 @@
-use std::error::Error;
+use crate::PngResult;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::slice::Iter;
 use std::str::FromStr;
 
 #[derive(PartialEq, Debug)]
-struct ChunkType {
+pub struct ChunkType {
     chunk_type_bytes: [u8; 4],
 }
 
 impl ChunkType {
-    fn bytes(&self) -> [u8; 4] {
+    pub fn bytes(&self) -> [u8; 4] {
         self.chunk_type_bytes
     }
 
@@ -34,12 +35,16 @@ impl ChunkType {
         // at the 5th position so it would be 32 and not 1 -- noob mistake, I know!
         self.chunk_type_bytes[3] & 32_u8 != 0
     }
+
+    pub fn iter(&self) -> Iter<'_, u8> {
+        self.chunk_type_bytes.iter()
+    }
 }
 
 impl TryFrom<[u8; 4]> for ChunkType {
-    type Error = crate::Error;
+    type Error = crate::PngError;
 
-    fn try_from(value: [u8; 4]) -> Result<Self, Self::Error> {
+    fn try_from(value: [u8; 4]) -> PngResult<Self> {
         let byte_check = |b: &u8| *b < 65 || *b > 122 || (*b > 90 && *b < 97);
         if value.iter().any(byte_check) {
             Err("Invalid chunk payload".into())
@@ -61,7 +66,7 @@ impl Display for ChunkType {
 }
 
 impl FromStr for ChunkType {
-    type Err = crate::Error;
+    type Err = crate::PngError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ChunkType::try_from(<[u8; 4]>::try_from(s.as_bytes()).unwrap())
@@ -151,6 +156,7 @@ mod tests {
 
         let chunk = ChunkType::from_str("Ru1t");
         assert!(chunk.is_err());
+        assert_eq!(chunk.err().unwrap().to_string(), "Invalid chunk payload");
     }
 
     #[test]
