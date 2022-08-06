@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::net::AddrParseError;
 use std::str::FromStr;
 
 #[derive(PartialEq, Debug)]
@@ -19,19 +18,21 @@ impl ChunkType {
     }
 
     fn is_critical(&self) -> bool {
-        (self.chunk_type_bytes[0] & 32_u8 == 0)
+        self.chunk_type_bytes[0] & 32_u8 == 0
     }
 
     fn is_public(&self) -> bool {
-        (self.chunk_type_bytes[1] & 32_u8 == 0)
+        self.chunk_type_bytes[1] & 32_u8 == 0
     }
 
     fn is_reserved_bit_valid(&self) -> bool {
-        (self.chunk_type_bytes[2] & 32_u8 == 0)
+        self.chunk_type_bytes[2] & 32_u8 == 0
     }
 
     fn is_safe_to_copy(&self) -> bool {
-        (self.chunk_type_bytes[3] & 32_u8 == 1)
+        // Don't make the mistake of checking for == 1 here given that we are setting the bit
+        // at the 5th position so it would be 32 and not 1 -- noob mistake, I know!
+        self.chunk_type_bytes[3] & 32_u8 != 0
     }
 }
 
@@ -39,13 +40,23 @@ impl TryFrom<[u8; 4]> for ChunkType {
     type Error = crate::Error;
 
     fn try_from(value: [u8; 4]) -> Result<Self, Self::Error> {
-        Ok(ChunkType { chunk_type_bytes: value })
+        let byte_check = |b: &u8| *b < 65 || *b > 122 || (*b > 90 && *b < 97);
+        if value.iter().any(byte_check) {
+            Err("Invalid chunk payload".into())
+        } else {
+            Ok(ChunkType {
+                chunk_type_bytes: value,
+            })
+        }
     }
 }
 
 impl Display for ChunkType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for b in self.chunk_type_bytes {
+            write!(f, "{}", char::from(b))?;
+        }
+        Ok(())
     }
 }
 
@@ -61,7 +72,6 @@ impl FromStr for ChunkType {
 mod tests {
     use super::*;
     use std::convert::TryFrom;
-    use std::io::Read;
     use std::str::FromStr;
     use std::{assert_eq, format};
 
