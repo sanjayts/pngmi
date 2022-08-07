@@ -4,38 +4,46 @@ use std::fmt::{Display, Formatter};
 use std::slice::Iter;
 use std::str::FromStr;
 
+/// ChunkType represents the chunk type as detailed out in the PNG spec
 #[derive(PartialEq, Debug)]
 pub struct ChunkType {
     chunk_type_bytes: [u8; 4],
 }
 
 impl ChunkType {
+    /// Returns the byte array representation of this chunk type
     pub fn bytes(&self) -> [u8; 4] {
         self.chunk_type_bytes
     }
 
+    /// Returns whether the current chunk type is valid
     fn is_valid(&self) -> bool {
         self.is_reserved_bit_valid()
     }
 
+    /// Returns if the current chunk type is critical
     fn is_critical(&self) -> bool {
         self.chunk_type_bytes[0] & 32_u8 == 0
     }
 
+    /// Return if the current chunk type is public
     fn is_public(&self) -> bool {
         self.chunk_type_bytes[1] & 32_u8 == 0
     }
 
+    /// Returns if the current chunk type has its reserved bit set
     fn is_reserved_bit_valid(&self) -> bool {
         self.chunk_type_bytes[2] & 32_u8 == 0
     }
 
+    /// Returns if the current chunk type is safe to copy
     fn is_safe_to_copy(&self) -> bool {
         // Don't make the mistake of checking for == 1 here given that we are setting the bit
         // at the 5th position so it would be 32 and not 1 -- noob mistake, I know!
         self.chunk_type_bytes[3] & 32_u8 != 0
     }
 
+    /// Returns the iterator over this chunk type
     pub fn iter(&self) -> Iter<'_, u8> {
         self.chunk_type_bytes.iter()
     }
@@ -44,6 +52,7 @@ impl ChunkType {
 impl TryFrom<[u8; 4]> for ChunkType {
     type Error = crate::PngError;
 
+    /// Attempt to parse chunk type out of the given byte array
     fn try_from(value: [u8; 4]) -> PngResult<Self> {
         let byte_check = |b: &u8| *b < 65 || *b > 122 || (*b > 90 && *b < 97);
         if value.iter().any(byte_check) {

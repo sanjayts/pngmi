@@ -3,7 +3,8 @@ use crate::{PngError, PngResult};
 use crc::Crc;
 use std::fmt::{Display, Formatter};
 
-struct Chunk {
+/// Chunk represents a PNG chunk as detailed out in the PNG spec
+pub struct Chunk {
     length: u32,
     chunk_type: ChunkType,
     data: Vec<u8>,
@@ -11,7 +12,14 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn new(chunk_type: ChunkType, data: Vec<u8>) -> Self {
+    /// The number of bytes taken up by the Chunk length field
+    const LENGTH_BYTES_LEN: usize = 4;
+
+    /// The number of bytes taken up by the chunk type field
+    const CHUNK_TYPE_BYTES_LEN: usize = 4;
+
+    /// Create a new `Chunk` from the given chunk type and payload.
+    pub fn new(chunk_type: ChunkType, data: Vec<u8>) -> Self {
         let crc = Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
         let mut digest = crc.digest();
         digest.update(&chunk_type.bytes());
@@ -24,27 +32,38 @@ impl Chunk {
         }
     }
 
+    /// The overall size of this chunk including chunk type, crc, data and length field
+    pub fn overall_length(&self) -> u32 {
+        self.length + 12 // 4 * 3 -- 4 bytes each for chunk type, crc, length field
+    }
+
+    /// The length of the data/payload held inside this chunk
     fn length(&self) -> u32 {
         self.length
     }
 
-    fn chunk_type(&self) -> &ChunkType {
+    /// Returns the type for this chunk
+    pub fn chunk_type(&self) -> &ChunkType {
         &self.chunk_type
     }
 
+    /// Returns the payload for this chunk
     fn data(&self) -> &[u8] {
         &self.data
     }
 
+    /// Returns the CRC or checksum for this chunk
     fn crc(&self) -> u32 {
         self.checksum
     }
 
-    fn data_as_string(&self) -> PngResult<String> {
+    /// Returns the data represented as `String` for this chunk
+    pub fn data_as_string(&self) -> PngResult<String> {
         String::from_utf8(self.data.clone()).map_err(PngError::from)
     }
 
-    fn as_bytes(&self) -> Vec<u8> {
+    /// Returns the byte representation for this chunk
+    pub fn as_bytes(&self) -> Vec<u8> {
         self.length
             .to_be_bytes()
             .iter()
@@ -58,18 +77,27 @@ impl Chunk {
 
 fn read_4_bytes(slice: &[u8], start: usize, end: usize) -> [u8; 4] {
     // If we can't convert a 4 element slice to 4 element array, we panic };
+    assert_eq!(end - start, 4);
     (&slice[start..end]).to_vec().try_into().unwrap()
 }
 
 impl TryFrom<&[u8]> for Chunk {
     type Error = PngError;
 
+    /// Attempt to perform conversion from a byte slice to Chunk
     fn try_from(value: &[u8]) -> PngResult<Chunk> {
-        let length = u32::from_be_bytes(read_4_bytes(value, 0, 4));
-        let chunk_type = ChunkType::try_from(read_4_bytes(value, 4, 8))?;
-        let (data_start, data_end) = (8 as usize, 8 + length as usize);
+        // Read the length and chunk type bytes back to back
+        let length = u32::from_be_bytes(read_4_bytes(value, 0, Chunk::LENGTH_BYTES_LEN));
+        let chunk_type = ChunkType::try_from(read_4_bytes(
+            value,
+            Chunk::CHUNK_TYPE_BYTES_LEN,
+            Chunk::CHUNK_TYPE_BYTES_LEN + Chunk::LENGTH_BYTES_LEN,
+        ))?;
+
+        let start = Chunk::CHUNK_TYPE_BYTES_LEN + Chunk::LENGTH_BYTES_LEN;
+        let (data_start, data_end) = (start, start + length as usize);
         let data = (&value[data_start..data_end]).to_vec();
-        let checksum = u32::from_be_bytes(read_4_bytes(value, data_end, value.len()));
+        let checksum = u32::from_be_bytes(read_4_bytes(value, data_end, data_end + 4));
         let chunk = Chunk::new(chunk_type, data);
 
         if chunk.checksum != checksum {
